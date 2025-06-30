@@ -1,0 +1,62 @@
+[
+  {
+    "numer": 1,
+    "name": "Edytor kodu VS Code",
+    "skroty": "vsc",
+    "type": "program",
+    "path": "C:\\Users\\jaros\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe"
+  },
+  {
+    "numer": 2,
+    "name": "Przeglądarka Firefox",
+    "skroty": "ff",
+    "type": "program",
+    "path": "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+  },
+  {
+    "numer": 10,
+    "name": "Dokumentacja Pythona",
+    "skroty": "pydoc",
+    "type": "url",
+    "path": "https://docs.python.org/3/"
+  },
+  {
+    "numer": 11,
+    "name": "Mój profil GitHub",
+    "skroty": "gh",
+    "type": "url",
+    "path": "https://github.com"
+  },
+  {
+    "numer": 20,
+    "name": "Kalkulator systemowy",
+    "type": "program",
+    "path": "calc.exe"
+  },
+  {
+    "numer": 30,
+    "name": "Folder Pobrane",
+    "type": "folder",
+    "path": "C:\\Users\\Jarek\\Downloads"
+  },
+  {
+    "numer": 31,
+    "name": "Folder z projektami",
+    "skroty": "proj",
+    "type": "folder",
+    "path": "D:\\Projekty"
+  },
+  {
+    "numer": 40,
+    "name": "Plik z notatkami (domyślny edytor)",
+    "type": "file",
+    "path": "C:\\Users\\Jarek\\Documents\\notatki.txt"
+  },
+  {
+    "numer": 41,
+    "name": "Otwórz plik HOSTS w Notatniku",
+    "type": "file_with_app",
+    "path": "C:\\Windows\\System32\\drivers\\etc\\hosts",
+    "app_path": "notepad.exe"
+  }
+]
