@@ -2,6 +2,7 @@ import os
 import sys
 import logging
 import locale
+import math
 
 # Logika importu biblioteki JSON
 try:
@@ -14,6 +15,7 @@ except ImportError:
 # --- Stałe i Konfiguracja ---
 LOG_FILE = 'log.log'
 MAX_MISTAKES = 5
+COLUMN_WIDTH = 43  # Szerokość dla pierwszej kolumny w launcherze
 
 # --- Kody kolorów ---
 COLOR_A, COLOR_B = '\033[97m', '\033[90m'
@@ -104,7 +106,16 @@ def process_global_commands(choice_str: str) -> str | None:
 
 # --- Funkcje dla poszczególnych trybów ---
 
+def format_item_for_display(item: dict) -> str:
+    """Tworzy sformatowany ciąg znaków dla pojedynczego elementu menu."""
+    # ZMIANA: Zwiększono rozmiar z <5 na <6
+    number_str = f"{item['numer']}."
+    formatted_number = f"{number_str:<6}"
+    shortcut_display = f" {COLOR_SHORTCUT}[{item['skroty']}]{COLOR_A}" if 'skroty' in item else ""
+    return f"  {COLOR_A}{formatted_number}{item['name']}{shortcut_display}"
+
 def run_launcher_mode(config: list) -> str:
+    """ZMIANA: Przebudowano, aby wyświetlać w dwóch kolumnach."""
     from collections import defaultdict
 
     print(f"\n{COLOR_INFO}--- Menu Główne ---{COLOR_RESET}")
@@ -112,16 +123,32 @@ def run_launcher_mode(config: list) -> str:
     for item in config:
         grouped_items[item['category']].append(item)
     sorted_categories = sorted(grouped_items.keys())
+
     for i, category_name in enumerate(sorted_categories):
-        if i > 0: print(f"\n{COLOR_B}--------------------------------------------------{COLOR_RESET}")
+        if i > 0:
+            print(f"{COLOR_B}--------------------------------------------------------------------------------------{COLOR_RESET}")
+        
+        # ZMIANA: Usunięto entery (puste linie) wokół nazwy kategorii
         cat_color = CATEGORY_COLORS[i % len(CATEGORY_COLORS)]
-        print(f"\n{cat_color}[ {category_name.upper()} ]{COLOR_RESET}")
+        print(f"{cat_color}[ {category_name.upper()} ]{COLOR_RESET}")
+
         items_in_category = grouped_items[category_name]
-        for item in items_in_category:
-            number_str = f"{item['numer']}."
-            formatted_number = f"{number_str:<5}"
-            shortcut_display = f" {COLOR_SHORTCUT}[{item['skroty']}]{COLOR_A}" if 'skroty' in item else ""
-            print(f"  {COLOR_A}{formatted_number}{item['name']}{shortcut_display}{COLOR_RESET}")
+        num_items = len(items_in_category)
+        split_point = math.ceil(num_items / 2)
+        
+        for i in range(split_point):
+            # Formatowanie lewej kolumny
+            left_item_str = format_item_for_display(items_in_category[i])
+            
+            # Formatowanie prawej kolumny, jeśli istnieje odpowiadający element
+            right_item_str = ""
+            right_index = i + split_point
+            if right_index < num_items:
+                right_item_str = format_item_for_display(items_in_category[right_index])
+            
+            # Drukowanie obu kolumn w jednej linii
+            print(f"{left_item_str:<{COLUMN_WIDTH}}{right_item_str}{COLOR_RESET}")
+
     mistake_counter = 0
     while mistake_counter < MAX_MISTAKES:
         prompt_text = f"\n{COLOR_PROMPT}Wybór (>p, >t, >c, >d, >e): {COLOR_RESET}"
@@ -203,7 +230,6 @@ def run_transform_mode() -> str:
         except Exception as e: logging.error(f"Błąd w trybie transformacji: {e}"); print(f"{COLOR_ERROR}Błąd: {e}{COLOR_RESET}")
 
 def run_calculator_mode() -> str:
-    import math
     safe_dict = {"pow": pow, "sqrt": math.sqrt, "fabs": math.fabs, "gcd": math.gcd, "floor": math.floor, "ceil": math.ceil, "trunc": math.trunc, "sin": math.sin, "cos": math.cos, "tan": math.tan, "log": math.log, "log10": math.log10, "factorial": math.factorial, "pi": math.pi, "e": math.e}
     print(f"\n{COLOR_INFO}--- Tryb Kalkulatora ---{COLOR_RESET}")
     print(f"Wpisz wyrażenie. Wpisz {COLOR_PROMPT}>h{COLOR_RESET} po pomoc.")
@@ -249,7 +275,6 @@ def run_date_mode() -> str:
         except Exception as e: logging.error(f"Błąd w trybie daty: {e}"); print(f"{COLOR_ERROR}Błąd: {e}{COLOR_RESET}")
 
 def execute_action(action: dict):
-    # ZMIANA: Leniwe importy i obsługa schowka
     import subprocess
     import webbrowser
     from urllib.parse import quote_plus
@@ -258,18 +283,15 @@ def execute_action(action: dict):
     except ImportError:
         pyperclip = None
 
-    # Pobranie wszystkich potrzebnych wartości z akcji
     action_type = action.get('type')
     path = action.get('path')
     app_path = action.get('app_path')
     name = action.get('name')
     clipboard_content = action.get('clipboard')
 
-    # ZMIANA: Logika kopiowania do schowka
     if clipboard_content is not None:
         if pyperclip:
             pyperclip.copy(str(clipboard_content))
-            # Użycie f-stringa do przycięcia zbyt długiej treści
             display_content = (str(clipboard_content)[:30] + '...') if len(str(clipboard_content)) > 33 else str(clipboard_content)
             print(f"{COLOR_SUCCESS}Skopiowano do schowka: '{display_content}'{COLOR_RESET}")
         else:
@@ -302,6 +324,11 @@ def execute_action(action: dict):
 def main():
     """Główna pętla programu - maszyna stanów."""
     import datetime
+    
+    # ZMIANA: Ustawia rozmiar okna konsoli w systemie Windows
+    if sys.platform == 'win32':
+        os.system('mode con: cols=100 lines=40')
+
     os.system(f'title PyPilot - {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     
     config_filename = 'config.json'
