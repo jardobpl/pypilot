@@ -4,59 +4,102 @@
     "name": "Edytor kodu VS Code",
     "skroty": "vsc",
     "type": "program",
-    "path": "C:\\Users\\jaros\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe"
+    "path": "C:\\Users\\jaros\\AppData\\Local\\Programs\\Microsoft VS Code\\Code.exe",
+	"category": "Programy"
   },
   {
     "numer": 2,
     "name": "Przeglądarka Firefox",
     "skroty": "ff",
     "type": "program",
-    "path": "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+    "path": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+	"category": "Programy"
   },
   {
     "numer": 10,
     "name": "Dokumentacja Pythona",
     "skroty": "pydoc",
     "type": "url",
-    "path": "https://docs.python.org/3/"
+    "path": "https://docs.python.org/3/",
+	"category": "Pliki"
   },
   {
     "numer": 11,
     "name": "Mój profil GitHub",
     "skroty": "gh",
     "type": "url",
-    "path": "https://github.com"
+    "path": "https://github.com",
+	"category": "WWW"
   },
   {
     "numer": 20,
     "name": "Kalkulator systemowy",
     "type": "program",
-    "path": "calc.exe"
+    "path": "calc.exe",
+	"category": "Programy"
   },
   {
     "numer": 30,
     "name": "Folder Pobrane",
     "type": "folder",
-    "path": "C:\\Users\\Jarek\\Downloads"
+    "path": "C:\\Users\\Jarek\\Downloads",
+	"category": "WWW"
   },
   {
     "numer": 31,
     "name": "Folder z projektami",
     "skroty": "proj",
     "type": "folder",
-    "path": "D:\\Projekty"
+    "path": "D:\\Projekty",
+	"category": "Foldey"
   },
   {
     "numer": 40,
     "name": "Plik z notatkami (domyślny edytor)",
     "type": "file",
-    "path": "C:\\Users\\Jarek\\Documents\\notatki.txt"
+    "path": "C:\\Users\\Jarek\\Documents\\notatki.txt",
+	"category": "Programy"
   },
   {
     "numer": 41,
     "name": "Otwórz plik HOSTS w Notatniku",
     "type": "file_with_app",
     "path": "C:\\Windows\\System32\\drivers\\etc\\hosts",
-    "app_path": "notepad.exe"
+    "app_path": "notepad.exe",
+	"category": "Programy"
+  },
+  {
+    "numer": 71,
+    "name": "Wyszukiwarka Google",
+    "type": "search_with_app",
+    "path": "https://www.google.com/search?q={}",
+    "app_path": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+	"category": "Wyszukiwarka"
+  },
+  {
+    "numer": 72,
+    "name": "Mapy",
+    "type": "search_with_app",
+    "path": "https://www.google.com/maps/search/{}",
+    "app_path": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+	"category": "Wyszukiwarka",
+	"clipboard":"Polska"
+  },
+  {
+    "numer": 73,
+    "name": "Translator PL -> EN",
+    "type": "search_with_app",
+    "path": "https://translate.google.com/?sl=pl&tl=en&text={}&op=translate",
+    "app_path": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+	"category": "Wyszukiwarka"
+  },
+  {
+    "numer": 74,
+    "name": "Translator EN -> PL",
+    "type": "search_with_app",
+    "path": "https://translate.google.com/?sl=en&tl=pl&text={}&op=translate",
+    "app_path": "C:\\Program Files\\Mozilla Firefox\\firefox.exe",
+	"category": "Wyszukiwarka"
   }
+  
 ]

@@ -1,32 +1,31 @@
 import os
 import sys
-import json
 import logging
-import subprocess
-import webbrowser
-import datetime
-import re
-import textwrap
-import math
 import locale
 
-# Pamiętaj, aby zainstalować tę bibliotekę: pip install pyperclip
+# Logika importu biblioteki JSON
 try:
-    import pyperclip
+    import orjson as json
+    ORJSON_AVAILABLE = True
 except ImportError:
-    print("BŁĄD: Biblioteka 'pyperclip' nie jest zainstalowana. Uruchom 'pip install pyperclip' w konsoli.")
-    sys.exit(1)
+    import json
+    ORJSON_AVAILABLE = False
 
 # --- Stałe i Konfiguracja ---
 LOG_FILE = 'log.log'
 MAX_MISTAKES = 5
 
-# Kody kolorów
+# --- Kody kolorów ---
 COLOR_A, COLOR_B = '\033[97m', '\033[90m'
 COLOR_ERROR, COLOR_PROMPT = '\033[91m', '\033[96m'
 COLOR_SHORTCUT, COLOR_SUCCESS = '\033[33m', '\033[92m'
 COLOR_INFO = '\033[94m'
 COLOR_RESET = '\033[0m'
+
+CATEGORY_COLORS = [
+    '\033[94m', '\033[92m', '\033[96m', '\033[91m',
+    '\033[95m', '\033[33m', '\033[97m',
+]
 
 try:
     locale.setlocale(locale.LC_TIME, 'pl_PL.UTF-8')
@@ -53,71 +52,46 @@ def enable_ansi_colors():
 def load_and_validate_config(filename: str) -> list | None:
     """Wczytuje i waliduje plik konfiguracyjny JSON."""
     try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        with open(filename, 'rb') as f:
+            content = f.read()
+            if not content:
+                data = []
+            else:
+                data = json.loads(content)
     except FileNotFoundError:
         error_msg = f"BŁĄD: Plik konfiguracyjny '{filename}' nie został znaleziony."
         logging.error(error_msg)
         print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}")
         return None
-    except json.JSONDecodeError:
-        error_msg = f"BŁĄD: Plik '{filename}' zawiera błędy składni JSON."
+    except (json.JSONDecodeError, TypeError) as e:
+        error_msg = f"BŁĄD: Plik '{filename}' zawiera błędy składni JSON. {e}"
         logging.error(error_msg)
         print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}")
         return None
 
     seen_numbers, seen_shortcuts = set(), set()
     for i, item in enumerate(data, 1):
+        if 'category' not in item or not isinstance(item.get('category'), str) or not item.get('category').strip():
+            error_msg = f"BŁĄD: Pozycja nr {i} nie ma klucza 'category' lub jest on pusty."
+            logging.error(error_msg); print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}"); return None
         if 'numer' not in item or not isinstance(item.get('numer'), int):
-            error_msg = f"BŁĄD: Pozycja nr {i} w pliku '{filename}' nie ma klucza 'numer' lub jego wartość nie jest liczbą."
-            logging.error(error_msg)
-            print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}")
-            return None
+            error_msg = f"BŁĄD: Pozycja nr {i} nie ma klucza 'numer' lub nie jest liczbą."
+            logging.error(error_msg); print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}"); return None
         number = item['numer']
         if number in seen_numbers:
-            error_msg = f"BŁĄD: Numer '{number}' jest zduplikowany w pliku '{filename}'."
-            logging.error(error_msg)
-            print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}")
-            return None
+            error_msg = f"BŁĄD: Numer '{number}' jest zduplikowany."
+            logging.error(error_msg); print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}"); return None
         seen_numbers.add(number)
         if 'skroty' in item:
             shortcut = item['skroty']
             if not isinstance(shortcut, str) or not shortcut:
-                error_msg = f"BŁĄD: 'skroty' dla pozycji z numerem {number} musi być niepustym tekstem."
-                logging.error(error_msg)
-                print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}")
-                return None
+                error_msg = f"BŁĄD: 'skroty' dla pozycji {number} musi być tekstem."
+                logging.error(error_msg); print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}"); return None
             if shortcut in seen_shortcuts:
-                error_msg = f"BŁĄD: Skrót '{shortcut}' jest zduplikowany w pliku '{filename}'."
-                logging.error(error_msg)
-                print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}")
-                return None
+                error_msg = f"BŁĄD: Skrót '{shortcut}' jest zduplikowany."
+                logging.error(error_msg); print(f"{COLOR_ERROR}{error_msg}{COLOR_RESET}"); return None
             seen_shortcuts.add(shortcut)
     return data
-
-def slugify(text: str) -> str:
-    polish_map = str.maketrans('ąćęłńóśźżĄĆĘŁŃÓŚŹŻ', 'acelnoszzACELNOSZZ')
-    text = text.translate(polish_map)
-    text = text.lower().strip()
-    text = re.sub(r'[^\w\s-]', '', text)
-    text = re.sub(r'[\s_-]+', '-', text)
-    return text
-
-def format_sql(sql: str) -> str:
-    keywords = [
-        'select', 'from', 'where', 'and', 'or', 'join', 'left join', 'right join',
-        'inner join', 'outer join', 'on', 'group by', 'order by', 'limit', 'offset',
-        'as', 'distinct', 'having', 'union', 'insert into', 'values', 'update', 'set',
-        'delete from', 'like', 'desc', 'asc', 'in', 'not', 'exists', 'between', 'case',
-        'when', 'then', 'else', 'end', 'is', 'null'
-    ]
-    sql = re.sub(r'\s+', ' ', sql.strip())
-    for kw in sorted(keywords, key=len, reverse=True):
-        pattern = r'\b' + re.escape(kw) + r'\b'
-        sql = re.sub(pattern, kw.upper(), sql, flags=re.IGNORECASE)
-    sql = re.sub(r'\b(FROM|WHERE|GROUP BY|ORDER BY|HAVING|LIMIT|OFFSET|SET|VALUES|ON|JOIN|INNER JOIN|LEFT JOIN|RIGHT JOIN|OUTER JOIN)\b', r'\n\1', sql)
-    sql = re.sub(r'\n(ON|JOIN|INNER JOIN|LEFT JOIN|RIGHT JOIN|OUTER JOIN)', r'\n  \1', sql)
-    return sql.strip()
 
 def process_global_commands(choice_str: str) -> str | None:
     choice = choice_str.lower()
@@ -131,11 +105,23 @@ def process_global_commands(choice_str: str) -> str | None:
 # --- Funkcje dla poszczególnych trybów ---
 
 def run_launcher_mode(config: list) -> str:
-    print(f"\n{COLOR_INFO}--- Menu Główne (Programy) ---{COLOR_RESET}")
-    for i, item in enumerate(config):
-        color = COLOR_A if i % 2 == 0 else COLOR_B
-        shortcut_display = f" {COLOR_SHORTCUT}[{item['skroty']}]{color}" if 'skroty' in item else ""
-        print(f"  {color}{item['numer']}. {item['name']}{shortcut_display}{COLOR_RESET}")
+    from collections import defaultdict
+
+    print(f"\n{COLOR_INFO}--- Menu Główne ---{COLOR_RESET}")
+    grouped_items = defaultdict(list)
+    for item in config:
+        grouped_items[item['category']].append(item)
+    sorted_categories = sorted(grouped_items.keys())
+    for i, category_name in enumerate(sorted_categories):
+        if i > 0: print(f"\n{COLOR_B}--------------------------------------------------{COLOR_RESET}")
+        cat_color = CATEGORY_COLORS[i % len(CATEGORY_COLORS)]
+        print(f"\n{cat_color}[ {category_name.upper()} ]{COLOR_RESET}")
+        items_in_category = grouped_items[category_name]
+        for item in items_in_category:
+            number_str = f"{item['numer']}."
+            formatted_number = f"{number_str:<5}"
+            shortcut_display = f" {COLOR_SHORTCUT}[{item['skroty']}]{COLOR_A}" if 'skroty' in item else ""
+            print(f"  {COLOR_A}{formatted_number}{item['name']}{shortcut_display}{COLOR_RESET}")
     mistake_counter = 0
     while mistake_counter < MAX_MISTAKES:
         prompt_text = f"\n{COLOR_PROMPT}Wybór (>p, >t, >c, >d, >e): {COLOR_RESET}"
@@ -160,11 +146,29 @@ def run_launcher_mode(config: list) -> str:
     return 'exit'
 
 def run_transform_mode() -> str:
-    transformations = {
-        1: ("UPPER CASE", "upper"), 2: ("lower case", "lower"), 3: ("Capitalize Case", "capitalize"),
-        4: ("Trim White Space", "trim"), 5: ("Convert Polish to Latin", "latinize"),
-        6: ("SLUGIFY", "slugify"), 7: ("Text Wrap", "wrap"), 8: ("Format SQL", "format_sql")
-    }
+    import re
+    import textwrap
+    try:
+        import pyperclip
+    except ImportError:
+        print(f"{COLOR_ERROR}BŁĄD: Biblioteka 'pyperclip' nie jest zainstalowana. Uruchom 'pip install pyperclip'.{COLOR_RESET}")
+        return 'launcher'
+
+    def slugify(text: str) -> str:
+        polish_map = str.maketrans('ąćęłńóśźżĄĆĘŁŃÓŚŹŻ', 'acelnoszzACELNOSZZ')
+        text = text.translate(polish_map)
+        text = text.lower().strip()
+        text = re.sub(r'[^\w\s-]', '', text)
+        return re.sub(r'[\s_-]+', '-', text)
+
+    def format_sql(sql: str) -> str:
+        keywords = ['select', 'from', 'where', 'and', 'or', 'join', 'left join', 'right join', 'inner join', 'outer join', 'on', 'group by', 'order by', 'limit', 'offset', 'as', 'distinct', 'having', 'union', 'insert into', 'values', 'update', 'set', 'delete from', 'like', 'desc', 'asc', 'in', 'not', 'exists', 'between', 'case', 'when', 'then', 'else', 'end', 'is', 'null']
+        sql = re.sub(r'\s+', ' ', sql.strip())
+        for kw in sorted(keywords, key=len, reverse=True): sql = re.sub(r'\b' + re.escape(kw) + r'\b', kw.upper(), sql, flags=re.IGNORECASE)
+        sql = re.sub(r'\b(FROM|WHERE|GROUP BY|ORDER BY|HAVING|LIMIT|OFFSET|SET|VALUES|ON|JOIN|INNER JOIN|LEFT JOIN|RIGHT JOIN|OUTER JOIN)\b', r'\n\1', sql)
+        return re.sub(r'\n(ON|JOIN|INNER JOIN|LEFT JOIN|RIGHT JOIN|OUTER JOIN)', r'\n  \1', sql).strip()
+
+    transformations = {1: ("UPPER CASE", "upper"), 2: ("lower case", "lower"), 3: ("Capitalize Case", "capitalize"), 4: ("Trim White Space", "trim"), 5: ("Convert Polish to Latin", "latinize"), 6: ("SLUGIFY", "slugify"), 7: ("Text Wrap", "wrap"), 8: ("Format SQL", "format_sql")}
     while True:
         print(f"\n{COLOR_INFO}--- Tryb Transformacji Tekstu ---{COLOR_RESET}")
         for key, (name, _) in transformations.items(): print(f"  {key}. {name}")
@@ -199,34 +203,20 @@ def run_transform_mode() -> str:
         except Exception as e: logging.error(f"Błąd w trybie transformacji: {e}"); print(f"{COLOR_ERROR}Błąd: {e}{COLOR_RESET}")
 
 def run_calculator_mode() -> str:
-    safe_dict = {
-        "pow": pow, "sqrt": math.sqrt, "fabs": math.fabs, "gcd": math.gcd, "floor": math.floor, "ceil": math.ceil,
-        "trunc": math.trunc, "sin": math.sin, "cos": math.cos, "tan": math.tan, "log": math.log, "log10": math.log10,
-        "factorial": math.factorial, "pi": math.pi, "e": math.e
-    }
+    import math
+    safe_dict = {"pow": pow, "sqrt": math.sqrt, "fabs": math.fabs, "gcd": math.gcd, "floor": math.floor, "ceil": math.ceil, "trunc": math.trunc, "sin": math.sin, "cos": math.cos, "tan": math.tan, "log": math.log, "log10": math.log10, "factorial": math.factorial, "pi": math.pi, "e": math.e}
     print(f"\n{COLOR_INFO}--- Tryb Kalkulatora ---{COLOR_RESET}")
-    print(f"Wpisz wyrażenie. Wpisz {COLOR_PROMPT}>h{COLOR_RESET} po pomoc, lub inną komendę trybu.")
+    print(f"Wpisz wyrażenie. Wpisz {COLOR_PROMPT}>h{COLOR_RESET} po pomoc.")
     while True:
         expression = input(f"{COLOR_PROMPT}Kalkulator > {COLOR_RESET}").strip()
         new_mode = process_global_commands(expression)
         if new_mode: return new_mode
         if not expression: continue
         if expression.lower() == '>h':
-            print(f"\n{COLOR_INFO}--- Pomoc Kalkulatora ---{COLOR_RESET}")
-            print(f"{COLOR_PROMPT}pow(x, y){COLOR_RESET}   - Potęgowanie (x do potęgi y)")
-            print(f"{COLOR_PROMPT}sqrt(x){COLOR_RESET}    - Pierwiastek kwadratowy z x")
-            print(f"{COLOR_PROMPT}fabs(x){COLOR_RESET}    - Wartość bezwzględna (zwraca float)")
-            print(f"{COLOR_PROMPT}gcd(a, b){COLOR_RESET}   - Największy wspólny dzielnik a i b")
-            print(f"{COLOR_PROMPT}ceil(x){COLOR_RESET}    - Zaokrąglenie w górę do najbliższej l. całkowitej")
-            print(f"{COLOR_PROMPT}floor(x){COLOR_RESET}   - Zaokrąglenie w dół do najbliższej l. całkowitej")
-            print(f"{COLOR_PROMPT}trunc(x){COLOR_RESET}   - Obcięcie części ułamkowej (zwraca int)")
-            print(f"{COLOR_PROMPT}factorial(x){COLOR_RESET}- Silnia z x (x musi być l. całkowitą nieujemną)")
-            print(f"{COLOR_PROMPT}sin(x)|cos(x)|tan(x){COLOR_RESET} - Funkcje trygonometryczne (argument w radianach)")
-            print(f"{COLOR_PROMPT}log(x){COLOR_RESET}     - Logarytm naturalny z x")
-            print(f"{COLOR_PROMPT}log10(x){COLOR_RESET}   - Logarytm dziesiętny z x")
-            print(f"\n{COLOR_INFO}Dostępne stałe:{COLOR_RESET}")
-            print(f"{COLOR_PROMPT}pi{COLOR_RESET}, {COLOR_PROMPT}e{COLOR_RESET}")
-            print(f"{COLOR_INFO}-------------------------{COLOR_RESET}")
+            print(f"\n{COLOR_INFO}--- Pomoc Kalkulatora ---\n{COLOR_PROMPT}"
+                  f"pow(x,y) | sqrt(x) | fabs(x) | gcd(a,b) | ceil(x) | floor(x)\n"
+                  f"trunc(x) | factorial(x) | sin(x) | cos(x) | tan(x) | log(x) | log10(x)\n"
+                  f"{COLOR_INFO}Stałe: {COLOR_PROMPT}pi, e{COLOR_RESET}")
             continue
         try:
             result = eval(expression, {"__builtins__": None}, safe_dict)
@@ -234,12 +224,13 @@ def run_calculator_mode() -> str:
         except Exception as e: print(f"  {COLOR_ERROR}Błąd w wyrażeniu: {e}{COLOR_RESET}")
 
 def run_date_mode() -> str:
-    date_formats = {
-        1: ("YYYY-MM-DD HH:MM:SS", "%Y-%m-%d %H:%M:%S"), 2: ("YYYYMMDD_HHMMSS", "%Y%m%d_%H%M%S"),
-        3: ("YYYY-MM-DD", "%Y-%m-%d"), 4: ("DD.MM.YYYY", "%d.%m.%Y"), 5: ("HH:MM:SS", "%H:%M:%S"),
-        6: ("dd MMMM YYYY (po polsku)", "%d %B %Y"), 7: ("Pełna data (po polsku)", "%A, %d %B %Y, %H:%M:%S"),
-        8: ("Timestamp (Unix)", "timestamp")
-    }
+    import datetime
+    try:
+        import pyperclip
+    except ImportError:
+        print(f"{COLOR_ERROR}BŁĄD: Biblioteka 'pyperclip' nie jest zainstalowana. Uruchom 'pip install pyperclip'.{COLOR_RESET}")
+        return 'launcher'
+    date_formats = {1: ("YYYY-MM-DD HH:MM:SS", "%Y-%m-%d %H:%M:%S"), 2: ("YYYYMMDD_HHMMSS", "%Y%m%d_%H%M%S"), 3: ("YYYY-MM-DD", "%Y-%m-%d"), 4: ("DD.MM.YYYY", "%d.%m.%Y"), 5: ("HH:MM:SS", "%H:%M:%S"), 6: ("dd MMMM YYYY (po polsku)", "%d %B %Y"), 7: ("Pełna data (po polsku)", "%A, %d %B %Y, %H:%M:%S"), 8: ("Timestamp (Unix)", "timestamp")}
     while True:
         print(f"\n{COLOR_INFO}--- Tryb Formatera Daty ---{COLOR_RESET}")
         for key, (name, _) in date_formats.items(): print(f"  {key}. {name}")
@@ -258,17 +249,59 @@ def run_date_mode() -> str:
         except Exception as e: logging.error(f"Błąd w trybie daty: {e}"); print(f"{COLOR_ERROR}Błąd: {e}{COLOR_RESET}")
 
 def execute_action(action: dict):
-    action_type, path, app_path, name = action.get('type'), action.get('path'), action.get('app_path'), action.get('name')
+    # ZMIANA: Leniwe importy i obsługa schowka
+    import subprocess
+    import webbrowser
+    from urllib.parse import quote_plus
+    try:
+        import pyperclip
+    except ImportError:
+        pyperclip = None
+
+    # Pobranie wszystkich potrzebnych wartości z akcji
+    action_type = action.get('type')
+    path = action.get('path')
+    app_path = action.get('app_path')
+    name = action.get('name')
+    clipboard_content = action.get('clipboard')
+
+    # ZMIANA: Logika kopiowania do schowka
+    if clipboard_content is not None:
+        if pyperclip:
+            pyperclip.copy(str(clipboard_content))
+            # Użycie f-stringa do przycięcia zbyt długiej treści
+            display_content = (str(clipboard_content)[:30] + '...') if len(str(clipboard_content)) > 33 else str(clipboard_content)
+            print(f"{COLOR_SUCCESS}Skopiowano do schowka: '{display_content}'{COLOR_RESET}")
+        else:
+            print(f"{COLOR_ERROR}BŁĄD: Biblioteka 'pyperclip' nie jest zainstalowana. Nie można skopiować.{COLOR_RESET}")
+    
     logging.info(f"Uruchamiam: '{name}'")
     try:
-        if action_type == 'program': subprocess.Popen([path])
-        elif action_type == 'url': webbrowser.open(path)
-        elif action_type in ['file', 'folder']: os.startfile(path)
-        elif action_type == 'file_with_app': subprocess.Popen([app_path, path])
-    except Exception as e: error_msg = f"Błąd przy uruchamianiu '{name}': {e}"; logging.error(error_msg); print(f"{COLOR_ERROR}BŁĄD: {error_msg}{COLOR_RESET}")
+        if action_type == 'program':
+            subprocess.Popen([path])
+        elif action_type == 'url':
+            webbrowser.open(path)
+        elif action_type in ['file', 'folder']:
+            os.startfile(path)
+        elif action_type == 'file_with_app':
+            subprocess.Popen([app_path, path])
+        elif action_type == 'search_with_app':
+            search_query = input(f"  {COLOR_PROMPT}Podaj frazę dla '{name}': {COLOR_RESET}")
+            if search_query.strip():
+                encoded_query = quote_plus(search_query)
+                final_url = path.format(encoded_query)
+                subprocess.Popen([app_path, final_url])
+            else:
+                print(f"{COLOR_INFO}Wyszukiwanie anulowane (brak frazy).{COLOR_RESET}")
+
+    except Exception as e:
+        error_msg = f"Błąd przy uruchamianiu '{name}': {e}"
+        logging.error(error_msg)
+        print(f"{COLOR_ERROR}BŁĄD: {error_msg}{COLOR_RESET}")
 
 def main():
     """Główna pętla programu - maszyna stanów."""
+    import datetime
     os.system(f'title PyPilot - {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     
     config_filename = 'config.json'
@@ -278,22 +311,19 @@ def main():
         print(f"{COLOR_PROMPT}Wczytuję profil: {profile_name}{COLOR_RESET}")
     
     config = load_and_validate_config(config_filename)
-    if not config: input("\nNaciśnij Enter..."); sys.exit(1)
+    if not config:
+        input("\nNaciśnij Enter, aby zakończyć...")
+        sys.exit(1)
     
     config.sort(key=lambda item: item['numer'])
     
     current_mode = 'launcher'
     while True:
-        if current_mode == 'launcher':
-            current_mode = run_launcher_mode(config)
-        elif current_mode == 'transform':
-            current_mode = run_transform_mode()
-        elif current_mode == 'calculator':
-            current_mode = run_calculator_mode()
-        elif current_mode == 'date':
-            current_mode = run_date_mode()
-        elif current_mode == 'exit':
-            sys.exit(0)
+        if current_mode == 'launcher': current_mode = run_launcher_mode(config)
+        elif current_mode == 'transform': current_mode = run_transform_mode()
+        elif current_mode == 'calculator': current_mode = run_calculator_mode()
+        elif current_mode == 'date': current_mode = run_date_mode()
+        elif current_mode == 'exit': sys.exit(0)
         else:
             print(f"{COLOR_ERROR}Nieznany błąd trybu. Powrót do menu głównego.{COLOR_RESET}")
             current_mode = 'launcher'
