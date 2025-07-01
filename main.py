@@ -15,7 +15,7 @@ except ImportError:
 # --- Stałe i Konfiguracja ---
 LOG_FILE = 'log.log'
 MAX_MISTAKES = 5
-COLUMN_WIDTH = 43  # Szerokość dla pierwszej kolumny w launcherze
+COLUMN_WIDTH = 43
 
 # --- Kody kolorów ---
 COLOR_A, COLOR_B = '\033[97m', '\033[90m'
@@ -107,15 +107,39 @@ def process_global_commands(choice_str: str) -> str | None:
 # --- Funkcje dla poszczególnych trybów ---
 
 def format_item_for_display(item: dict) -> str:
-    """Tworzy sformatowany ciąg znaków dla pojedynczego elementu menu."""
-    # ZMIANA: Zwiększono rozmiar z <5 na <6
+    """
+    ZMIANA: Zmieniono układ na [Nazwa] [Skrót] [Dopełnienie].
+    Tworzy sformatowany ciąg znaków dla pojedynczej kolumny,
+    zapewniając stałą szerokość, przycinanie i dopełnianie.
+    """
+    # 1. Przygotuj stałe komponenty bez kolorów
     number_str = f"{item['numer']}."
-    formatted_number = f"{number_str:<6}"
-    shortcut_display = f" {COLOR_SHORTCUT}[{item['skroty']}]{COLOR_A}" if 'skroty' in item else ""
-    return f"  {COLOR_A}{formatted_number}{item['name']}{shortcut_display}"
+    prefix = f"  {number_str:<6}"
+    # Spacja przed skrótem jest teraz jego częścią
+    shortcut_raw = f" [{item['skroty']}]" if 'skroty' in item else ""
+
+    # 2. Oblicz maksymalną dostępną długość dla nazwy
+    max_name_len = COLUMN_WIDTH - len(prefix) - len(shortcut_raw)
+
+    # 3. Przytnij nazwę, jeśli jest za długa
+    name = item['name']
+    if len(name) > max_name_len:
+        name = name[:max_name_len - 3] + "..."
+
+    # 4. Złóż główną treść i oblicz dopełnienie
+    content_with_shortcut = f"{name}{shortcut_raw}"
+    padding_size = COLUMN_WIDTH - len(prefix) - len(content_with_shortcut)
+    padding = ' ' * padding_size
+
+    # 5. Złóż finalny ciąg znaków z kolorami
+    shortcut_colored = f" {COLOR_SHORTCUT}[{item['skroty']}]" if 'skroty' in item else ""
+    
+    # Połącz części w nowym porządku: [Prefix][Nazwa][Skrót][Dopełnienie]
+    return f"{COLOR_A}{prefix}{name}{shortcut_colored}{padding}"
+
 
 def run_launcher_mode(config: list) -> str:
-    """ZMIANA: Przebudowano, aby wyświetlać w dwóch kolumnach."""
+    """ZMIANA: Uproszczono drukowanie, cała logika w format_item_for_display."""
     from collections import defaultdict
 
     print(f"\n{COLOR_INFO}--- Menu Główne ---{COLOR_RESET}")
@@ -126,9 +150,9 @@ def run_launcher_mode(config: list) -> str:
 
     for i, category_name in enumerate(sorted_categories):
         if i > 0:
-            print(f"{COLOR_B}--------------------------------------------------------------------------------------{COLOR_RESET}")
+            # Separator dopasowany do nowej szerokości (86 znaków)
+            print(f"{COLOR_B}{'-' * (COLUMN_WIDTH * 2)}{COLOR_RESET}")
         
-        # ZMIANA: Usunięto entery (puste linie) wokół nazwy kategorii
         cat_color = CATEGORY_COLORS[i % len(CATEGORY_COLORS)]
         print(f"{cat_color}[ {category_name.upper()} ]{COLOR_RESET}")
 
@@ -137,17 +161,15 @@ def run_launcher_mode(config: list) -> str:
         split_point = math.ceil(num_items / 2)
         
         for i in range(split_point):
-            # Formatowanie lewej kolumny
             left_item_str = format_item_for_display(items_in_category[i])
             
-            # Formatowanie prawej kolumny, jeśli istnieje odpowiadający element
-            right_item_str = ""
+            right_item_str = ' ' * COLUMN_WIDTH  # Domyślnie pusta kolumna
             right_index = i + split_point
             if right_index < num_items:
                 right_item_str = format_item_for_display(items_in_category[right_index])
             
-            # Drukowanie obu kolumn w jednej linii
-            print(f"{left_item_str:<{COLUMN_WIDTH}}{right_item_str}{COLOR_RESET}")
+            # Prostsze drukowanie, bo formatowanie jest w funkcji
+            print(f"{left_item_str}{right_item_str}{COLOR_RESET}")
 
     mistake_counter = 0
     while mistake_counter < MAX_MISTAKES:
@@ -256,7 +278,7 @@ def run_date_mode() -> str:
     except ImportError:
         print(f"{COLOR_ERROR}BŁĄD: Biblioteka 'pyperclip' nie jest zainstalowana. Uruchom 'pip install pyperclip'.{COLOR_RESET}")
         return 'launcher'
-    date_formats = {1: ("YYYY-MM-DD HH:MM:SS", "%Y-%m-%d %H:%M:%S"), 2: ("YYYYMMDD_HHMMSS", "%Y%m%d_%H%M%S"), 3: ("YYYY-MM-DD", "%Y-%m-%d"), 4: ("DD.MM.YYYY", "%d.%m.%Y"), 5: ("HH:MM:SS", "%H:%M:%S"), 6: ("dd MMMM YYYY (po polsku)", "%d %B %Y"), 7: ("Pełna data (po polsku)", "%A, %d %B %Y, %H:%M:%S"), 8: ("Timestamp (Unix)", "timestamp")}
+    date_formats = {1: ("YYYY-MM-DD HH:MM:SS", "%Y-%m-%d %H:%M:%S"), 2: ("YYYYMMDD_HHMMSS", "%Y%m%d_%H%M%S"), 3: ("YYYY-MM-DD", "%Y-%m-%d"), 4: ("DD.MM.YYYY", "%d.%m.%Y"), 5: ("HH:MM:SS", "%H:%M:%S"), 6: ("dd MMMM organizacyjny (po polsku)", "%d %B %Y"), 7: ("Pełna data (po polsku)", "%A, %d %B %Y, %H:%M:%S"), 8: ("Timestamp (Unix)", "timestamp")}
     while True:
         print(f"\n{COLOR_INFO}--- Tryb Formatera Daty ---{COLOR_RESET}")
         for key, (name, _) in date_formats.items(): print(f"  {key}. {name}")
@@ -325,9 +347,9 @@ def main():
     """Główna pętla programu - maszyna stanów."""
     import datetime
     
-    # ZMIANA: Ustawia rozmiar okna konsoli w systemie Windows
+    # Ustawia szerokość okna na 90 kolumn, aby zmieścić 2x43 + margines
     if sys.platform == 'win32':
-        os.system('mode con: cols=100 lines=40')
+        os.system('mode con: cols=90 lines=40')
 
     os.system(f'title PyPilot - {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     
